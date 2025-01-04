@@ -1,0 +1,107 @@
+import os
+import re
+import sys
+
+offset_adjustment = 0
+modify_bytes_count = 4
+
+def dec_to_hex(num):
+    hex_str = format(num, '08X')
+    return hex_str[6:8] + hex_str[4:6] + hex_str[2:4] + hex_str[0:2]
+
+def process_h_file(filename):
+    with open(filename, 'r', encoding='utf-8') as file:
+        return [re.sub(r'[\u4e00-\u9fa5]+|#.*', '', line).strip() for line in file if line.strip() and not line.lstrip().startswith("#")]
+
+def read_file_content(file_path):
+    try:
+        with open(file_path, "rb") as file:
+            return bytearray(file.read())
+    except Exception as e:
+        print(f"无法读取文件 {file_path}: {e}")
+        return None
+
+def find_hex_sequence(file_content, hex_sequence):
+    offsets = []
+    start = 0
+    sequence_bytes = bytes.fromhex(hex_sequence)
+    while start < len(file_content):
+        offset = file_content.find(sequence_bytes, start)
+        if offset == -1:
+            break
+        offsets.append(offset)
+        start = offset + len(sequence_bytes)
+    return offsets
+
+def replace_bytes(file_path, offset, new_bytes):
+    try:
+        with open(file_path, "r+b") as file:
+            file.seek(offset)
+            file.write(new_bytes)
+    except Exception as e:
+        print(f"无法写入文件 {file_path}: {e}")
+
+def process_target_files(h_file_data, target_file_path):
+    file_content = read_file_content(target_file_path)
+    if file_content is None:
+        return 0, 0, 0
+
+    total_pairs = found_count = not_found_count = 0
+
+    for line in h_file_data:
+        pairs = line.split()
+        if len(pairs) != 2:
+            continue
+
+        total_pairs += 1
+        hex_pair1, hex_pair2 = map(lambda x: dec_to_hex(int(x)), pairs)
+        offsets1, offsets2 = find_hex_sequence(file_content, hex_pair1), find_hex_sequence(file_content, hex_pair2)
+
+        if offsets1 and offsets2:
+            print(f"处理文件: {target_file_path}")
+            print(f"匹配到 {hex_pair1} 共 {len(offsets1)} 次，{hex_pair2} 共 {len(offsets2)} 次")
+            for offset1, offset2 in zip(offsets1, offsets2):
+                start_pos1 = max(offset1 - offset_adjustment, 0)
+                start_pos2 = max(offset2 - offset_adjustment, 0)
+                prev_bytes1 = file_content[start_pos1:start_pos1 + modify_bytes_count]
+                prev_bytes2 = file_content[start_pos2:start_pos2 + modify_bytes_count]
+                replace_bytes(target_file_path, start_pos1, prev_bytes2)
+                replace_bytes(target_file_path, start_pos2, prev_bytes1)
+            found_count += len(offsets1)  # 增加成功替换的次数
+        else:
+            not_found_count += 1
+
+    return total_pairs, found_count, not_found_count
+
+def main():
+    if len(sys.argv) < 2:
+        print("使用方法: python3 ./tools/2 <目标文件夹路径>")
+        return
+
+    target_dir = os.path.abspath(sys.argv[1])
+    if not os.path.exists(target_dir):
+        print(f"错误: 找不到目录 {target_dir}")
+        return
+
+    h_file_path = input("请输入配置文件(.h)的路径: ").strip()
+    h_file_path = os.path.abspath(h_file_path)
+    if not os.path.exists(h_file_path):
+        print(f"错误: 找不到配置文件 {h_file_path}")
+        return
+
+    h_file_data = process_h_file(h_file_path)
+    total_pairs = total_found = total_not_found = 0
+
+    for root, dirs, files in os.walk(target_dir):
+        for filename in files:
+            if filename.endswith(('.dat', '.uexp')):
+                target_file_path = os.path.join(root, filename)
+                pairs, found, not_found = process_target_files(h_file_data, target_file_path)
+                total_pairs += pairs
+                total_found += found
+                total_not_found += not_found
+
+    print(f"\n一共 {total_pairs} 对，成功修改: {total_found} 对，未找到: {total_not_found} 对")
+
+if __name__ == "__main__":
+    main()

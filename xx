@@ -1,0 +1,143 @@
+#!/bin/bash
+chmod +x tools/quickbms
+chmod +x tools/urpack
+# 定义颜色
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m' # 无颜色
+
+# 主菜单函数
+main_menu() {
+    clear
+    echo -e "${BLUE}============================="
+    echo -e "          ${YELLOW}和平精英一键美化工具${BLUE}         "
+    echo -e "=============================${NC}"
+    echo -e "${GREEN}1) PAK 解包${NC}"
+    echo -e "${GREEN}2) PAK 打包${NC}"
+    echo -e "${GREEN}3) 一键美化${NC}"
+    echo -e "${GREEN}4) 退出${NC}"
+    echo -e "${BLUE}=============================${NC}"
+
+    read -p "请输入选项 (1-4): " choice
+    case $choice in
+        1) pak_unpack_menu ;;
+        2) pak_pack_menu ;;
+        3) beautify_menu ;;
+        4) echo -e "${YELLOW}再见！${NC}"; exit 0 ;;
+        *) echo -e "${RED}无效选项！${NC}"; sleep 1; main_menu ;;
+    esac
+}
+
+# 获取 PAK 文件列表并显示
+get_pak_files() {
+    pak_files=($(ls ./pak/*.pak 2>/dev/null))
+    if [ ${#pak_files[@]} -eq 0 ]; then
+        echo -e "${RED}当前没有 PAK 文件！${NC}"
+        return 1
+    fi
+    for i in "${!pak_files[@]}"; do
+        echo "$((i+1))) ${pak_files[i]##*/}"  # 显示文件名而非路径
+    done
+    return 0
+}
+
+# PAK 解包菜单
+pak_unpack_menu() {
+    clear
+    echo -e "${BLUE}======= PAK 解包 =======${NC}"
+    get_pak_files
+    if [ $? -eq 1 ]; then
+        sleep 2; main_menu; return
+    fi
+
+    echo -e "${GREEN}选择解包方式:${NC}"
+    echo -e "${GREEN}1) 使用 QuickBMS 解包${NC}"
+    echo -e "${GREEN}2) 使用 URPack 解包${NC}"
+    read -p "请输入选项 (1-2): " unpack_choice
+
+    if [ "$unpack_choice" -eq 1 ]; then
+        output_dir="./解包dat"
+        mkdir -p "$output_dir"
+
+        echo -e "${YELLOW}正在使用 QuickBMS 解包 PAK 文件到 ${output_dir}...${NC}"
+        
+        # 遍历并解包所有的 pak 文件
+        for pak_file in ./pak/*.pak; do
+            echo -e "${GREEN}解包文件: ${pak_file##*/}${NC}"
+            qemu-i386 ./tools/quickbms ./tools/解包.bms "$pak_file" "$output_dir"
+        done
+
+        # 等待解包完成
+        echo -e "${YELLOW}等待解包完成...${NC}"
+        sleep 2  # 等待 10 秒以确保解包完成
+
+        # 运行 Python 脚本
+        echo -e "${YELLOW}解包完成，正在运行 Python 脚本 '1'...${NC}"
+        python3 ./tools/1
+
+    elif [ "$unpack_choice" -eq 2 ]; then
+        output_dir="./解包uexp"
+        mkdir -p "$output_dir"
+
+        echo -e "${YELLOW}正在使用 URPack 解包 PAK 文件到 ${output_dir}...${NC}"
+        for pak_file in ./pak/*.pak; do
+            echo -e "${GREEN}解包文件: ${pak_file##*/}${NC}"
+            ./tools/urpack -a "$pak_file" "$output_dir"
+        done
+    else
+        echo -e "${RED}无效选项！${NC}"
+        sleep 1; pak_unpack_menu
+    fi
+
+    echo -e "${YELLOW}解包完成！${NC}"
+    sleep 1; main_menu
+}
+
+# PAK 打包菜单
+pak_pack_menu() {
+    clear
+    echo -e "${BLUE}======= PAK 打包 =======${NC}"
+    echo -e "${YELLOW}正在从 pak 文件夹中打包...${NC}"
+    ./tools/urpack -a -r ./pak ./pak/output.pak
+    echo -e "${YELLOW}打包完成！${NC}"
+    sleep 1; main_menu
+}
+
+# 一键美化菜单
+beautify_menu() {
+    clear
+    echo -e "${BLUE}======= 一键美化 =======${NC}"
+    echo -e "${GREEN}1) 载具美化${NC}"
+    echo -e "${GREEN}2) 衣服美化${NC}"
+    echo -e "${GREEN}3) 武器美化${NC}"
+    echo -e "${GREEN}4) 猥实体美化${NC}"
+    echo -e "${GREEN}5) 返回主菜单${NC}"
+    echo -e "${BLUE}========================${NC}"
+
+    read -p "请输入选项 (1-5): " beautify_choice
+    case $beautify_choice in
+        1) 
+            echo -e "${YELLOW}正在执行载具美化...${NC}"
+            python3 ./tools/2 "/data/data/com.termux/files/home/自制工具/解包dat/载具"
+            ;;
+        2) 
+            echo -e "${YELLOW}正在执行衣服美化...${NC}"
+            python3 ./tools/3
+            ;;
+        3) 
+            echo -e "${YELLOW}正在执行武器美化...${NC}"
+            python3 ./tools/4
+            ;;
+        4) 
+            echo -e "${YELLOW}正在执行猥实体美化...${NC}"
+            python3 ./tools/5
+            ;;
+        5) main_menu ;;
+        *) echo -e "${RED}无效选项！${NC}"; sleep 1; beautify_menu ;;
+    esac
+}
+
+# 启动主菜单
+main_menu

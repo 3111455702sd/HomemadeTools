@@ -25,7 +25,9 @@ if __name__ == "__main__":
     else:
         hex_patterns = [
             bytes.fromhex('841D9A00'),
+            bytes.fromhex('25922100'),
             bytes.fromhex('0B270600'),
+            bytes.fromhex('73BB0A00'),
             bytes.fromhex('11723200')
         ]
         search_and_move_files(source_dir, hex_patterns)

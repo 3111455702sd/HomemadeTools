@@ -1,8 +1,5 @@
 import os
 import re
-import sys
-import random
-import time
 
 offset_adjustment = 0
 modify_bytes_count = 4
@@ -15,10 +12,31 @@ def dec_to_hex(num):
         print(f"转换十进制到十六进制时发生错误: {e}")
         return None
 
-def process_h_file(filename):
+def process_config_file(filename):
     try:
+        processed_lines = []
         with open(filename, 'r', encoding='utf-8') as file:
-            return [re.sub(r'[\u4e00-\u9fa5]+|#.*', '', line).strip() for line in file if line.strip() and not line.lstrip().startswith("#")]
+            for line in file:
+                
+                line = line.split('#')[0].strip()
+                
+                if not line:
+                    continue              
+                if re.match(r'^\d+\s+\d+$', line):
+                    processed_lines.append(line)
+                    continue               
+                if "[" in line and "]" in line:
+                    start = line.find("[") + 1
+                    end = line.find("]")
+                    numbers = line[start:end].split(",")
+                    if len(numbers) == 2:
+                        num1, num2 = numbers[0].strip(), numbers[1].strip()
+                        processed_lines.append(f"{num1} {num2}")
+                        continue
+                processed_line = re.sub(r'[^\d\s]', '', line)
+                if processed_line.strip():  # 确保清理后行不为空
+                    processed_lines.append(processed_line.strip())
+        return processed_lines
     except Exception as e:
         print(f"无法读取配置文件 {filename}: {e}")
         return []
@@ -51,8 +69,8 @@ def replace_bytes(file_path, offset, new_bytes):
     except Exception as e:
         print(f"无法写入文件 {file_path}: {e}")
 
-def process_target_files(h_file_data, target_file_path):
-    if not h_file_data:
+def process_target_files(config_data, target_file_path):
+    if not config_data:
         print(f"错误: 配置文件数据为空，无法处理文件 {target_file_path}")
         return 0, 0, 0
 
@@ -62,13 +80,20 @@ def process_target_files(h_file_data, target_file_path):
 
     total_pairs = found_count = not_found_count = 0
 
-    for line in h_file_data:
+    for line in config_data:
         pairs = line.split()
         if len(pairs) != 2:
             continue
 
         total_pairs += 1
-        hex_pair1, hex_pair2 = map(lambda x: dec_to_hex(int(x)), pairs)
+        try:
+            cleaned_pairs = [re.sub(r'\D', '', pair) for pair in pairs]
+            hex_pair1, hex_pair2 = map(lambda x: dec_to_hex(int(x)), cleaned_pairs)
+        except ValueError as e:
+            print(f"配置文件中的一行无法转换为整数: {pairs}. 错误: {e}")
+            not_found_count += 1
+            continue
+
         if hex_pair1 is None or hex_pair2 is None:
             continue
 
@@ -82,7 +107,7 @@ def process_target_files(h_file_data, target_file_path):
                 prev_bytes2 = file_content[start_pos2:start_pos2 + modify_bytes_count]
                 replace_bytes(target_file_path, start_pos1, prev_bytes2)
                 replace_bytes(target_file_path, start_pos2, prev_bytes1)
-            found_count += len(offsets1)  
+            found_count += len(offsets1)
         else:
             not_found_count += 1
 
@@ -93,9 +118,9 @@ def print_intro():
     [启动成功]
     正在加载配置文件...
     选择并处理目标文件中..
-    注意：xxxxxxxxx请把要一键美化的dat放入打包dat文件夹!!!
-    注意：xxxxxxxxx请把要一键美化的dat放入打包dat文件夹!!!
-    注意：xxxxxxxxx请把要一键美化的dat放入打包dat文件夹!!!
+    注意：请把要一键美化的dat文件放入"打包dat"文件夹!!!
+    注意：请把要一键美化的dat文件放入"打包dat"文件夹!!!
+    注意：请把要一键美化的dat文件放入"打包dat"文件夹!!!
     """
     print(intro)
 
@@ -116,42 +141,43 @@ def main():
         print(f"错误: 找不到配置文件目录 {config_dir}")
         return
     
-    h_files = [f for f in os.listdir(config_dir) if f.endswith('.h')]
-    if not h_files:
-        print(f"错误: 配置文件目录 {config_dir} 中没有找到 .h 文件")
+    supported_extensions = ['.h', '.py', '.txt']
+    config_files = [f for f in os.listdir(config_dir) if any(f.endswith(ext) for ext in supported_extensions)]
+    
+    if not config_files:
+        print(f"错误: 配置文件目录 {config_dir} 中没有找到支持的配置文件")
         return
     
-    # 显示配置文件供用户选择
     print("[配置文件列表] 请选择配置文件：")
-    for i, h_file in enumerate(h_files, start=1):
-        print(f"{i}. {h_file}")
+    for i, config_file in enumerate(config_files, start=1):
+        print(f"{i}. {config_file}")
     
     while True:
         try:
             choice = int(input("请输入配置文件编号: "))
-            if choice < 1 or choice > len(h_files):
+            if choice < 1 or choice > len(config_files):
                 print("错误: 选择无效，请重新选择")
             else:
-                break  
+                break
         except ValueError:
             print("错误: 输入无效，请输入数字")
     
-    h_file_path = os.path.join(config_dir, h_files[choice - 1])
+    config_file_path = os.path.join(config_dir, config_files[choice - 1])
 
-    h_file_data = process_h_file(h_file_path)
-    if not h_file_data:
+    config_data = process_config_file(config_file_path)
+    if not config_data:
         print("错误: 配置文件处理失败")
         return
 
     total_pairs = total_found = total_not_found = 0
 
-    print_status_update("开始处理文件...")
+    print_status_update("开始处理文件...请稍候")
 
     for root, dirs, files in os.walk(target_dir):
         for filename in files:
             if filename.endswith(('.dat', '.uexp')):
                 target_file_path = os.path.join(root, filename)
-                pairs, found, not_found = process_target_files(h_file_data, target_file_path)
+                pairs, found, not_found = process_target_files(config_data, target_file_path)
                 total_pairs += pairs
                 total_found += found
                 total_not_found += not_found

@@ -1,3 +1,3 @@
-chmod ＋x xx
+chmod ＋x xx     
 ./xx
 就行了
